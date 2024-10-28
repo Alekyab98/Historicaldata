@@ -1,0 +1,18 @@
+#!/bin/bash
+
+START_DATE=$1
+END_DATE=$2
+# Convert dates to seconds for comparison
+current_date=$(date -I -d "$START_DATE")
+# Loop through each date in the range
+while [ "$current_date" != $(date -I -d "$END_DATE + 1 day") ]; do
+  echo "Executing query for date: $current_date"
+  # Run the BigQuery Stored Proc for the current date
+  bq query \
+    --use_legacy_sql=false \
+    --parameter=start_date:date:$current_date \
+    --parameter=end_date:date:$current_date \
+    < update_label_fix_sp.sql
+  # Move to the next date
+  current_date=$(date -I -d "$current_date + 1 day")
+done
