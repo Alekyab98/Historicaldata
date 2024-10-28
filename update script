@@ -1,0 +1,38 @@
+#!/bin/bash
+
+# Check if the required arguments are provided
+
+if [ $# -ne 2 ]; then
+  echo "Usage: $0 <START_DATE> <END_DATE>"
+  exit 1
+fi
+
+START_DATE=$1
+END_DATE=$2
+
+# Validate date format (YYYY-MM-DD)
+
+if ! date -I -d "$START_DATE" >/dev/null 2>&1 || ! date -I -d "$END_DATE" >/dev/null 2>&1; then
+  echo "Invalid date format. Use YYYY-MM-DD."
+  exit 1
+fi
+
+# Convert dates to standard format
+current_date=$(date -I -d "$START_DATE")
+end_date=$(date -I -d "$END_DATE")
+
+# Loop through each date in the range
+
+while [ "$current_date" != $(date -I -d "$end_date + 1 day") ]; do
+  echo "Executing stored procedure for trans_dt: $current_date"
+
+  # Run the BigQuery stored procedure with the current date as trans_dt input
+  bq query  --use_legacy_sql=false  "CALL aid_nwperf_aether_core_uat_tbls.aether_smf_performance_historical_sp
+('$current_date');"
+
+  # Check if the command was successful
+
+  if [ $? -ne 0 ]; then
+    echo "Stored procedure failed for date: $current_date"
+    exit 1
+  fi
