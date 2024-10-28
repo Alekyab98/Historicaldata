@@ -1,0 +1,30 @@
+-- Backup of existing Prod table for 1 trans_dt
+create table `vz-it-pr-gudv-dtwndo-0.aid_nwperf_aether_core_uat_tbls.label_fix_smf`
+as
+(select * from `vz-it-pr-gudv-dtwndo-0.aid_nwperf_aether_core_tbls.aether_smf_performance` where trans_dt='2024-10-20');
+
+CREATE OR REPLACE PROCEDURE aid_nwperf_aether_core_uat_tbls.aether_smf_performance_historical_sp(p_trans_dt DATE)
+options(strict_mode=False)
+
+BEGIN  
+MERGE INTO `vz-it-pr-gudv-dtwndo-0.aid_nwperf_aether_core_uat_tbls.label_fix_smf` tgt
+USING (
+select * from
+( with update1 as (select *,   SAFE.PARSE_JSON(STRING(labels)) as labels1 from `vz-it-pr-gudv-dtwndo-0.aid_nwperf_aether_core_tbls.aether_smf_performance`
+),
+update2 as
+(select *,   TO_JSON(JSON_REMOVE(labels1,'$.__name__','$.jobid','$.job','$.localdn','$.write_relabel_group','$.instance','$.kubernetes_namespace','$.kubernetes_pod_name','$.applicationId')) as corrected_labels
+from update1)
+select trans_dt,event_time,vendor,fqdn,labels,metric_name,metric_sum_value,metric_increase_value,schedule_time,created_timestamp,corrected_labels from update2)
+)  src
+on tgt.trans_dt=src.trans_dt
+and tgt.event_time=src.event_time
+and tgt.fqdn=src.fqdn
+and tgt.metric_name=src.metric_name
+and tgt.vendor=src.vendor
+and MD5(to_json_string(tgt.labels))=MD5(to_json_string(src.labels))
+and tgt.trans_dt=p_trans_dt 
+WHEN MATCHED THEN
+UPDATE SET tgt.labels = src.corrected_labels;
+
+END;
