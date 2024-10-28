@@ -1,0 +1,54 @@
+WITH source_data AS (
+    SELECT 
+        trans_dt,
+        event_time,
+        fqdn,
+        SAFE_CAST(increase_value AS BIGNUMERIC) AS src_increase_value,
+        SAFE_CAST(sum_value AS BIGNUMERIC) AS src_sum_value,
+        MD5(TO_JSON_STRING(
+            TO_JSON(JSON_REMOVE(SAFE.PARSE_JSON(labels),
+            '$.__name__','$.jobid','$.job','$.localdn','$.write_relabel_group',
+            '$.instance','$.kubernetes_namespace','$.kubernetes_pod_name','$.applicationId'
+        )))) AS src_checksum
+    FROM 
+        `<source_project>.<source_dataset>.<source_table>`
+    WHERE 
+        trans_dt BETWEEN '<start_date>' AND '<end_date>'
+),
+target_data AS (
+    SELECT 
+        trans_dt,
+        event_time,
+        fqdn,
+        metric_increase_value AS tgt_increase_value,
+        metric_sum_value AS tgt_sum_value,
+        MD5(TO_JSON_STRING(labels)) AS tgt_checksum
+    FROM 
+        `<target_project>.<target_dataset>.<target_table>`
+    WHERE 
+        trans_dt BETWEEN '<start_date>' AND '<end_date>'
+)
+SELECT 
+    s.trans_dt,
+    s.event_time,
+    s.fqdn,
+    s.src_increase_value,
+    t.tgt_increase_value,
+    s.src_sum_value,
+    t.tgt_sum_value,
+    s.src_checksum,
+    t.tgt_checksum,
+    CASE 
+        WHEN s.src_increase_value = t.tgt_increase_value AND s.src_sum_value = t.tgt_sum_value AND s.src_checksum = t.tgt_checksum THEN 'Match'
+        ELSE 'Mismatch'
+    END AS validation_result
+FROM 
+    source_data s
+LEFT JOIN 
+    target_data t
+ON 
+    s.trans_dt = t.trans_dt
+    AND s.event_time = t.event_time
+    AND s.fqdn = t.fqdn
+ORDER BY 
+    s.trans_dt, s.event_time, s.fqdn;
